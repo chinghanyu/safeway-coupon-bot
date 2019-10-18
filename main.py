@@ -95,7 +95,7 @@ if __name__ == "__main__":
                 try:
                     ok_btn = WebDriverWait(browser, 5).until(
                         ec.presence_of_element_located((By.XPATH, '//button[contains(text(), "Okay")]')))
-                    ok_btn.click()
+                    browser.execute_script("arguments[0].click();", ok_btn)
                     break
                 except TimeoutException:
                     print("No Confirm Change Store window")
@@ -180,7 +180,7 @@ if __name__ == "__main__":
                 try:
                     load_more_btn = WebDriverWait(browser, 2).until(
                         ec.presence_of_element_located((By.CLASS_NAME, "load-more")))
-                    load_more_btn.click()
+                    browser.execute_script("arguments[0].click();", load_more_btn)
                 except TimeoutException:
                     print("Done loading all the coupons")
                     break
