@@ -43,6 +43,7 @@ if __name__ == "__main__":
                 break
 
             browser = webdriver.Chrome()
+            browser.set_window_size(1440, 900)
             login_url = "https://www.vons.com/account/sign-in.html"
             username = row['username']
             password = row['password']
@@ -72,13 +73,13 @@ if __name__ == "__main__":
             # 3. T&C
 
             # handle Select Store pop-up window
-            sleep(2)
+            sleep(3)
             retry = 0
             while retry < 2:
                 try:
                     make_my_store_btn = WebDriverWait(browser, 5).until(
                         ec.visibility_of_element_located((By.XPATH, '//button[contains(text(), "Make My Store")]')))
-                    make_my_store_btn.click()
+                    browser.execute_script("arguments[0].click();", make_my_store_btn)
                     break
                 except TimeoutException or ElementNotInteractableException:
                     print("No Select Store pop-up window")
@@ -89,7 +90,7 @@ if __name__ == "__main__":
                     sleep(1)
 
             # handle Confirm Change Store pop-up window
-            sleep(2)
+            sleep(1)
             retry = 0
             while retry < 2:
                 try:
@@ -123,7 +124,7 @@ if __name__ == "__main__":
                     sleep(1)
 
             # handle T&C pop-up window the second time
-            sleep(2)
+            sleep(1)
             retry = 0
             while retry < 2:
                 try:
