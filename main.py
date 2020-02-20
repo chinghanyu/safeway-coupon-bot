@@ -44,6 +44,7 @@ if __name__ == "__main__":
 
             browser = webdriver.Chrome()
             browser.set_window_size(1440, 900)
+            browser.set_window_position(0, 800)
             login_url = "https://www.vons.com/account/sign-in.html"
             username = row['username']
             password = row['password']
@@ -73,13 +74,17 @@ if __name__ == "__main__":
             # 3. T&C
 
             # handle Select Store pop-up window
-            sleep(3)
+            print("Handling Select Store pop-up window")
             retry = 0
             while retry < 2:
                 try:
-                    make_my_store_btn = WebDriverWait(browser, 5).until(
-                        ec.visibility_of_element_located((By.XPATH, '//button[contains(text(), "Make My Store")]')))
-                    browser.execute_script("arguments[0].click();", make_my_store_btn)
+                    make_my_store_btn = WebDriverWait(browser, 10).until(
+                        ec.visibility_of_element_located((By.XPATH, '//*[@id="fulfillment-conflict-modal__button"]')))
+                    sleep(1)
+                    make_my_store_btn.click()
+                    # there seems to be a bug that the button has no response but we have to refresh the web page
+                    sleep(0.5)
+                    browser.refresh()
                     break
                 except TimeoutException or ElementNotInteractableException:
                     print("No Select Store pop-up window")
@@ -95,7 +100,7 @@ if __name__ == "__main__":
             while retry < 2:
                 try:
                     ok_btn = WebDriverWait(browser, 5).until(
-                        ec.presence_of_element_located((By.XPATH, '//button[contains(text(), "Okay")]')))
+                        ec.presence_of_element_located((By.XPATH, '//button[contains(text(), "Ok")]')))
                     browser.execute_script("arguments[0].click();", ok_btn)
                     break
                 except TimeoutException:
