@@ -2,9 +2,11 @@ import argparse
 import csv
 
 from selenium import webdriver
-from selenium.common.exceptions import ElementNotInteractableException
-from selenium.common.exceptions import ElementNotVisibleException
+# from selenium.common.exceptions import ElementNotInteractableException
+# from selenium.common.exceptions import ElementNotVisibleException
 from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import SessionNotCreatedException
+from selenium.common.exceptions import StaleElementReferenceException
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -42,7 +44,12 @@ if __name__ == "__main__":
                 print("Skipping the last {} accounts...".format(total_rows - args.parse_to))
                 break
 
-            browser = webdriver.Chrome()
+            try:
+                browser = webdriver.Chrome()
+            except SessionNotCreatedException as e:
+                print(e.msg)
+                browser.close()
+
             browser.set_window_size(1440, 900)
             browser.set_window_position(0, 800)
             login_url = "https://www.vons.com/account/sign-in.html"
@@ -63,6 +70,10 @@ if __name__ == "__main__":
                     passwd.send_keys(password)
                     passwd.send_keys(Keys.ENTER)
                     break
+                except StaleElementReferenceException:
+                    print("Referred element was reloaded...")
+                    browser.execute_script('window.stop();')
+                    browser.refresh()
                 except TimeoutException:
                     print("Timeout loading login pager, retrying...")
                     browser.execute_script('window.stop();')
@@ -72,9 +83,9 @@ if __name__ == "__main__":
             # 1. Select Store
             # 2. Confirm Store
             # 3. T&C
-
+            """
             # handle Select Store pop-up window
-            print("Handling Select Store pop-up window")
+            print("Handling Select Store pop-up window.")
             retry = 0
             while retry < 2:
                 try:
@@ -87,13 +98,14 @@ if __name__ == "__main__":
                     browser.refresh()
                     break
                 except TimeoutException or ElementNotInteractableException:
-                    print("No Select Store pop-up window")
+                    print("No Select Store pop-up window.")
                     break
                 except ElementNotVisibleException:
-                    print("Make My Store button not visible, wait 1 seconds")
+                    print("Make My Store button not visible, wait 1 seconds.")
                     retry += 1
                     sleep(1)
-
+            """
+            """
             # handle Confirm Change Store pop-up window
             sleep(1)
             retry = 0
@@ -104,13 +116,14 @@ if __name__ == "__main__":
                     browser.execute_script("arguments[0].click();", ok_btn)
                     break
                 except TimeoutException:
-                    print("No Confirm Change Store window")
+                    print("No Confirm Change Store window.")
                     break
                 except ElementNotVisibleException:
-                    print("Confirm Change Store button not visible, wait 1 second")
+                    print("Confirm Change Store button not visible, wait 1 second.")
                     retry += 1
                     sleep(1)
-
+            """
+            """
             # handle T&C pop-up window
             sleep(2)
             retry = 0
@@ -121,13 +134,14 @@ if __name__ == "__main__":
                     close_btn.click()
                     break
                 except TimeoutException:
-                    print("No T&C pop-up window")
+                    print("No T&C pop-up window.")
                     break
                 except ElementNotVisibleException:
-                    print("Close button not visible, wait 1 second")
+                    print("Close button not visible, wait 1 second.")
                     retry += 1
                     sleep(1)
-
+            """
+            """
             # handle T&C pop-up window the second time
             sleep(1)
             retry = 0
@@ -138,15 +152,17 @@ if __name__ == "__main__":
                     close_btn.click()
                     break
                 except TimeoutException or ElementNotInteractableException:
-                    print("No T&C pop-up window")
+                    print("No T&C pop-up window.")
                     break
                 except ElementNotVisibleException:
-                    print("Close button not visible, wait 1 seconds")
+                    print("Close button not visible, wait 1 seconds.")
                     retry += 1
                     sleep(1)
             """
+            """
             # set store
             sleep(2)
+            retry = 0
             while retry < 2:
                 try:
                     change_link = WebDriverWait(browser, 5).until(
@@ -160,15 +176,28 @@ if __name__ == "__main__":
                     continue
             """
             # click J4U tab
-            sleep(2)
-            try:
-                j4u_tab = WebDriverWait(browser, 5).until(
-                    ec.presence_of_element_located((By.XPATH, '//a[@href="/justforu-guest.html"]')))
-                j4u_tab.click()
-            except NoSuchElementException:
-                print("Cannot find J4U tab, skipping...")
-                browser.close()
-                continue
+            sleep(1)
+            retry = 0
+            while retry < 2:
+                try:
+                    j4u_tab = WebDriverWait(browser, 5).until(
+                        ec.presence_of_element_located((By.XPATH, '//a[@href="/justforu-guest.html"]')))
+                    j4u_tab.click()
+                    break
+                # except ElementClickInterceptedException:
+                #    print("Store confirmation window is blocking. Try refreshing the page...")
+                #    browser.refresh()
+                #    retry += 1
+                #    continue
+                except TimeoutException:
+                    print("Time out. Try refreshing the page...")
+                    browser.refresh()
+                    retry += 1
+                    continue
+                except NoSuchElementException:
+                    print("Cannot find J4U tab, skipping...")
+                    browser.close()
+                    continue
 
             # click coupon & deals tab
             # sleep(2)
@@ -182,26 +211,40 @@ if __name__ == "__main__":
 
             # keep clicking load more button
             sleep(2)
+            print("Loading coupons...")
             while True:
                 try:
-                    load_more_btn = WebDriverWait(browser, 2).until(
+                    load_more_btn = WebDriverWait(browser, 10).until(
                         ec.presence_of_element_located((By.CLASS_NAME, "load-more")))
                     browser.execute_script("arguments[0].click();", load_more_btn)
                 except TimeoutException:
-                    print("Done loading all the coupons")
+                    print("Done loading all the coupons.")
                     break
+
+            # scan free items
+            free_items = []
+            free_item_xpath = "//span[text()='FREE']"
+
+            print("Looking for free items...")
+            try:
+                free_items = WebDriverWait(browser, 3).until(
+                    ec.presence_of_all_elements_located((By.XPATH, free_item_xpath)))
+            except TimeoutException:
+                print("Timeout.")
+
+            print("Found {} free item(s).".format(len(free_items)))
 
             # add coupons
             added = []
             unadded = []
-            xpath_added = "//div[contains(@class, 'coupon-clip-button')]//span[text()='ADDED']"
-            xpath_unadded = "//div[contains(@class, 'coupon-clip-button')]//button[text()='ADD']"
+            xpath_added = "//div[contains(@class, 'coupon-clip-button')]//span[text()='Clipped']"
+            xpath_unadded = "//div[contains(@class, 'coupon-clip-button')]//button[text()='Clip Coupon']"
 
             try:
                 unadded = WebDriverWait(browser, 3).until(
                     ec.presence_of_all_elements_located((By.XPATH, xpath_unadded)))
             except TimeoutException:
-                print("Timeout. Cannot find any unadded coupons")
+                print("Timeout. Cannot find any unadded coupons.")
                 browser.close()
                 continue
 
@@ -209,13 +252,13 @@ if __name__ == "__main__":
                 added = WebDriverWait(browser, 3).until(
                     ec.presence_of_all_elements_located((By.XPATH, xpath_added)))
             except TimeoutException:
-                print("Timeout. Cannot find any added coupons")
+                print("Timeout. Cannot find any added coupons.")
 
-            print('Added: {}; unadded: {}'.format(len(added), len(unadded)))
+            print('Added: {}; unadded: {}.'.format(len(added), len(unadded)))
 
             sleep(0.1)
             if len(unadded) == 0:
-                print('No coupon to be added')
+                print('No coupon to be added.')
 
             t_coupons = tqdm(unadded)
             for coupon in t_coupons:
