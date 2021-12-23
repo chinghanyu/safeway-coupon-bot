@@ -2,14 +2,15 @@ import argparse
 import csv
 
 from selenium import webdriver
-# from selenium.common.exceptions import ElementNotInteractableException
-# from selenium.common.exceptions import ElementNotVisibleException
+from selenium.common.exceptions import ElementNotInteractableException
+from selenium.common.exceptions import ElementNotVisibleException
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import SessionNotCreatedException
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as ec
 from time import sleep
@@ -20,15 +21,49 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--file', dest='file_name', default='myaccounts.csv',
-                        help='Username and password in CSV format')
+                        help="Username and password in CSV format")
     parser.add_argument('--category', dest='category', default='special_offers', nargs='+',
                         help="Customize coupon categories. Use 'all' or a comma separated list")
-    parser.add_argument('--parse-from', dest='parse_from', default=0,
-                        help='Start parsing from designated account')
-    parser.add_argument('--parse-to', dest='parse_to', default=999,
-                        help='Stop parsing after designated account')
+    parser.add_argument('--include', dest='inclusions', default='0-999',
+                        help="Specify the accounts to be parsed in a-b,c,d-f format (inclusive)")
+    parser.add_argument('--exclude', dest='exclusions', default='',
+                        help="Specify the accounts not to be parsed in the inclusion list")
+    parser.add_argument('--browser', dest='browser', default='firefox',
+                        help="Select browser between firefox and chrome; driver support is required")
+    parser.add_argument('--headless', dest='headless', default=True, type=bool,
+                        help="Set True to run in headless mode")
 
     args = parser.parse_args()
+
+    supported_browsers = ['firefox', 'chrome']
+    if str(args.browser).lower() not in supported_browsers:
+        print("Please use supported browsers: {}".format(", ".join(supported_browsers)))
+
+    inclusions = set()
+    intervals = str(args.inclusions).split(',')
+
+    for interval in intervals:
+        begin_end = interval.split('-')
+        if len(begin_end) == 1:     # a
+            inclusions.add([int(begin_end[0])])
+        elif len(begin_end) == 2:   # a-b
+            inclusions |= set(range(int(begin_end[0]), int(begin_end[1]) + 1))
+        else:
+            continue
+
+    exclusions = set()
+    intervals = str(args.exclusions).split(',')
+    if len(intervals[0]) > 0:
+        for interval in intervals:
+            begin_end = interval.split('-')
+            if len(begin_end) == 1:     # a
+                exclusions.add([int(begin_end[0])])
+            elif len(begin_end) == 2:   # a-b
+                exclusions |= set(range(int(begin_end[0]), int(begin_end[1]) + 1))
+            else:
+                continue
+
+        inclusions -= exclusions
 
     with open(file=args.file_name, newline='') as csv_file:
         reader = csv.DictReader(csv_file)
@@ -36,23 +71,29 @@ if __name__ == "__main__":
         total_rows = len(rows)
 
         for i, row in enumerate(rows):
-            if i < int(args.parse_from):
-                print("Skipping the first {} accounts...".format(args.parse_from))
+            if i not in inclusions:
                 continue
 
-            if i > int(args.parse_to):
-                print("Skipping the last {} accounts...".format(total_rows - args.parse_to))
-                break
-
             try:
-                browser = webdriver.Chrome()
+                # Firefox seems to be more stable than Chrome
+                if str(args.browser).lower() == 'firefox':
+                    ff_options = Options()
+                    if args.headless:
+                        ff_options.headless = True
+                    browser = webdriver.Firefox(options=ff_options, executable_path='geckodriver.exe')
+                elif str(args.browser).lower() == 'chrome':
+                    ch_options = Options()
+                    if args.headless:
+                        ch_options.add_argument("--headless")
+                    browser = webdriver.Chrome("chromedriver.exe", options=ch_options)
+                # elif for additional browser support
             except SessionNotCreatedException as e:
                 print(e.msg)
                 browser.close()
 
-            browser.set_window_size(1440, 900)
-            browser.set_window_position(0, 800)
-            login_url = "https://www.vons.com/account/sign-in.html"
+            browser.set_window_size(1200, 800)
+            # browser.set_window_position(0, 800)
+            login_url = 'https://www.safeway.com/account/sign-in.html'
             username = row['username']
             password = row['password']
 
@@ -63,9 +104,10 @@ if __name__ == "__main__":
             while True:
                 try:
                     uid = WebDriverWait(browser, 10).until(ec.presence_of_element_located(
-                        (By.NAME, "userId")))
+                        (By.NAME, 'userId')))
                     passwd = WebDriverWait(browser, 10).until(ec.presence_of_element_located(
-                        (By.NAME, "inputPassword")))
+                        (By.NAME, 'inputPassword')))
+                    sleep(1)
                     uid.send_keys(username)
                     passwd.send_keys(password)
                     passwd.send_keys(Keys.ENTER)
@@ -83,7 +125,7 @@ if __name__ == "__main__":
             # 1. Select Store
             # 2. Confirm Store
             # 3. T&C
-            """
+
             # handle Select Store pop-up window
             print("Handling Select Store pop-up window.")
             retry = 0
@@ -104,84 +146,15 @@ if __name__ == "__main__":
                     print("Make My Store button not visible, wait 1 seconds.")
                     retry += 1
                     sleep(1)
-            """
-            """
-            # handle Confirm Change Store pop-up window
-            sleep(1)
-            retry = 0
-            while retry < 2:
-                try:
-                    ok_btn = WebDriverWait(browser, 5).until(
-                        ec.presence_of_element_located((By.XPATH, '//button[contains(text(), "Ok")]')))
-                    browser.execute_script("arguments[0].click();", ok_btn)
-                    break
-                except TimeoutException:
-                    print("No Confirm Change Store window.")
-                    break
-                except ElementNotVisibleException:
-                    print("Confirm Change Store button not visible, wait 1 second.")
-                    retry += 1
-                    sleep(1)
-            """
-            """
-            # handle T&C pop-up window
-            sleep(2)
-            retry = 0
-            while retry < 2:
-                try:
-                    close_btn = WebDriverWait(browser, 5).until(
-                        ec.presence_of_element_located((By.XPATH, '//button//a[contains(text(), "Close")]')))
-                    close_btn.click()
-                    break
-                except TimeoutException:
-                    print("No T&C pop-up window.")
-                    break
-                except ElementNotVisibleException:
-                    print("Close button not visible, wait 1 second.")
-                    retry += 1
-                    sleep(1)
-            """
-            """
-            # handle T&C pop-up window the second time
-            sleep(1)
-            retry = 0
-            while retry < 2:
-                try:
-                    close_btn = WebDriverWait(browser, 5).until(
-                        ec.visibility_of_element_located((By.XPATH, '//button//a[contains(text(), "Close")]')))
-                    close_btn.click()
-                    break
-                except TimeoutException or ElementNotInteractableException:
-                    print("No T&C pop-up window.")
-                    break
-                except ElementNotVisibleException:
-                    print("Close button not visible, wait 1 seconds.")
-                    retry += 1
-                    sleep(1)
-            """
-            """
-            # set store
-            sleep(2)
-            retry = 0
-            while retry < 2:
-                try:
-                    change_link = WebDriverWait(browser, 5).until(
-                        ec.visibility_of_element_located((By.XPATH, '//*[@id="currentStoreAddressWWW"]')))
-                    # //*[@id="header-top-left-section"]/span/a[3]
-                    # /html/body/div[1]/div/div/div[1]/div/div/div/div[2]/div[2]/div[1]/div[1]/div[1]/div[1]/div/div[1]/span/a[3]
-                    # //*[@id="currentStoreAddressWWW"]
-                    change_link.click()
-                except NoSuchElementException:
-                    print("Error")
-                    continue
-            """
+
             # click J4U tab
-            sleep(1)
+            sleep(2)
             retry = 0
             while retry < 2:
                 try:
                     j4u_tab = WebDriverWait(browser, 5).until(
-                        ec.presence_of_element_located((By.XPATH, '//a[@href="/justforu-guest.html"]')))
+                        ec.presence_of_element_located((By.XPATH, '//a[@href="/foru-guest.html"]')))
+                    sleep(1)
                     j4u_tab.click()
                     break
                 # except ElementClickInterceptedException:
@@ -199,24 +172,14 @@ if __name__ == "__main__":
                     browser.close()
                     continue
 
-            # click coupon & deals tab
-            # sleep(2)
-            # try:
-            #    coupon_and_deal_tab = WebDriverWait(browser, 10).until(
-            #        EC.presence_of_element_located((By.XPATH, '//a[@href="/justforu/coupons-deals.html"]')))
-            #    #//*[@id="leftNavStaticMenu"]/li[1]/a
-            #    coupon_and_deal_tab.click()
-            # except NoSuchElementException:
-            #    print("Cannot find coupon and deals tab")
-
             # keep clicking load more button
             sleep(2)
             print("Loading coupons...")
             while True:
                 try:
                     load_more_btn = WebDriverWait(browser, 10).until(
-                        ec.presence_of_element_located((By.CLASS_NAME, "load-more")))
-                    browser.execute_script("arguments[0].click();", load_more_btn)
+                        ec.presence_of_element_located((By.CLASS_NAME, 'load-more')))
+                    browser.execute_script('arguments[0].click();', load_more_btn)
                 except TimeoutException:
                     print("Done loading all the coupons.")
                     break
@@ -237,16 +200,8 @@ if __name__ == "__main__":
             # add coupons
             added = []
             unadded = []
-            xpath_added = "//div[contains(@class, 'coupon-clip-button')]//span[text()='Clipped']"
+            xpath_added = "//span[contains(@class, 'coupon-clipped-container')]"
             xpath_unadded = "//div[contains(@class, 'coupon-clip-button')]//button[text()='Clip Coupon']"
-
-            try:
-                unadded = WebDriverWait(browser, 3).until(
-                    ec.presence_of_all_elements_located((By.XPATH, xpath_unadded)))
-            except TimeoutException:
-                print("Timeout. Cannot find any unadded coupons.")
-                browser.close()
-                continue
 
             try:
                 added = WebDriverWait(browser, 3).until(
@@ -254,16 +209,28 @@ if __name__ == "__main__":
             except TimeoutException:
                 print("Timeout. Cannot find any added coupons.")
 
-            print('Added: {}; unadded: {}.'.format(len(added), len(unadded)))
+            print("Added: {}".format(len(added)))
+
+            try:
+                unadded = WebDriverWait(browser, 3).until(
+                    ec.presence_of_all_elements_located((By.XPATH, xpath_unadded)))
+            except TimeoutException:
+                print("Unadded: {}".format(len(unadded)))
+                print("Timeout. Cannot find any unadded coupons.")
+                browser.close()
+                sleep(1)
+                continue
+
+            print("Unadded: {}".format(len(unadded)))
 
             sleep(0.1)
             if len(unadded) == 0:
-                print('No coupon to be added.')
+                print("No coupon to be added.")
 
             t_coupons = tqdm(unadded)
             for coupon in t_coupons:
-                t_coupons.set_description(desc='Adding new coupons ... ', refresh=True)
-                browser.execute_script("arguments[0].click();", coupon)
+                t_coupons.set_description(desc="Adding new coupons ... ", refresh=True)
+                browser.execute_script('arguments[0].click();', coupon)
                 sleep(0.01)
 
             browser.close()
